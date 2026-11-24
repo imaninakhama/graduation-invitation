@@ -201,6 +201,7 @@ footer{text-align:center;font-size:.6rem;letter-spacing:.3em;text-transform:uppe
 #hero .mk{padding-bottom:.14em;margin-bottom:-.14em}
 
 
+.deadline{text-align:center;font-family:var(--serif);font-style:italic;font-size:clamp(1.2rem,4.2vw,1.55rem);color:var(--burg);margin-top:1.3rem}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition-duration:.01s!important;transition-delay:0s!important}html{scroll-behavior:auto}.rv,.mk>span{opacity:1;transform:none}}
 </style>
 </head>
@@ -298,6 +299,7 @@ footer{text-align:center;font-size:.6rem;letter-spacing:.3em;text-transform:uppe
 <section id="rsvp">
   <p class="eyebrow rv" style="text-align:center">Kindly reply</p>
   <h2 class="rv">IT WOULD MEAN THE WORLD<br>TO HAVE YOU THERE.</h2>
+  <p class="deadline rv" id="deadline"></p>
   <div class="card rv" id="card">
     <form id="form" novalidate>
       <label for="gname">Your full name</label><input type="text" id="gname" name="name" autocomplete="name" required>
@@ -375,11 +377,13 @@ const CONFIG = {
       "On 4 December I will receive my Certificate in Software Engineering. I am proud of it, quietly and fully, because I know exactly what it cost.",
       "I am deeply grateful to my family and friends, to the mentors who explained things twice, and to everyone who simply believed I would get there. I did not do this alone, and I would love for you to be beside me when it is recognised."]}
   ],
-  music: "assets/audio/invitation-music.mp3",  // plays once, start to finish (no loop); volume below
+  music: ["assets/audio/invitation-music.mp3","assets/audio/Not_Over_Until_Its_Done.mp3","assets/Not_Over_Until_Its_Done.mp3"],  // first file that exists is used; plays once, no loop
   musicVolume: 0.35,
 
   
   // RSVP — see README notes: paste a Formspree (or similar) endpoint to receive replies.
+  rsvpDeadline: "Tuesday, 1st December 2026",   // shown above the RSVP form
+  emailTo: "nakhamaimani@gmail.com",        // replies are also emailed here (via FormSubmit, free)
   rsvpEndpoint: "",                         // e.g. "https://formspree.io/f/xxxxxxxx"
   whatsappNumber: "254796755846",                       // YOUR WhatsApp number, country code first, no + or spaces, e.g. "2547XXXXXXXX"
   maxGuests: 4
@@ -396,6 +400,7 @@ $$('.yr').forEach(e=>e.textContent=C.classYear);
 $('#ecYear').textContent=C.classYear; $('#ecName').textContent=C.name.toUpperCase();
 $('#seal').textContent=seal; $('#fullName').textContent=C.name; $('#qual').textContent=C.qualification; if(C.institution)$('#uni').textContent=C.institution; else $('#uni').remove();
 $('#sig').textContent=C.signature;
+$('#deadline').textContent='Kindly reply before '+C.rsvpDeadline;
 $('#map').href=C.mapsUrl;
 const L=C.lunch;$('#lmap').href=L.mapsUrl;
 function rows(el,list){list.forEach(([k,v,n])=>{if(!v)return;const r=document.createElement('div'),dt=document.createElement('dt'),dd=document.createElement('dd');r.className='row rv';dt.textContent=k;dd.textContent=v;if(n){const m=document.createElement('small');m.textContent=n;dd.append(m)}r.append(dt,dd);el.append(r)})}
@@ -432,7 +437,8 @@ if(!reduce){let t=false;addEventListener('scroll',()=>{if(t)return;t=true;reques
 
 /* Music (starts only after the guest taps the envelope) */
 const aud=$('#aud'),mb=$('#music');let fade;
-aud.src=C.music;aud.volume=0;
+const srcs=[].concat(C.music);aud.src=srcs[0];aud.volume=0;
+(async()=>{for(const u of srcs){const ok=await new Promise(r=>{const a=new Audio();a.preload='metadata';a.onloadedmetadata=()=>r(true);a.onerror=()=>r(false);a.src=u});if(ok){if(u!==srcs[0])aud.src=u;return}}})();
 function setUI(on){mb.classList.toggle('off',!on);mb.setAttribute('aria-pressed',on);$('#mlab').textContent=on?'Music on':'Music off'}
 function fadeTo(v,done){clearInterval(fade);fade=setInterval(()=>{const d=v-aud.volume;if(Math.abs(d)<.02){aud.volume=v;clearInterval(fade);done&&done()}else aud.volume=Math.min(1,Math.max(0,aud.volume+Math.sign(d)*.02))},80)}
 function play(){if(aud.error)aud.load();aud.play().then(()=>{setUI(true);fadeTo(C.musicVolume)}).catch(()=>{setUI(false);if(aud.error||aud.networkState===3)$('#mlab').textContent='No audio file'})}
@@ -465,6 +471,7 @@ if(isNaN(target)){$('#cdmsg').textContent='Set a valid eventISO in CONFIG.'}else
 const gs=$('#guests'),lg=$('#lguests');for(let i=1;i<=C.maxGuests;i++){gs.add(new Option(i,i));lg.add(new Option(i,i))}
 const sync=()=>{$('#gwrap').style.display=$('input[name=attending]:checked').value.startsWith('Will')?'':'none';const l=$('input[name=lunch]:checked');$('#lwrap').style.display=l&&l.value==='Will join lunch'?'':'none'};
 $$('input[name=attending],input[name=lunch]').forEach(r=>r.onchange=sync);
+const endpoint=C.rsvpEndpoint||(C.emailTo?`https://formsubmit.co/ajax/${C.emailTo}`:'');
 if(C.whatsappNumber)$('#note').textContent='Your reply will open in WhatsApp, ready to send to me.';
 $('#form').addEventListener('submit',async e=>{e.preventDefault();const f=e.target.elements,note=$('#note'),name=f.name.value.trim(),bad=m=>{note.textContent=m;note.scrollIntoView({block:'center',behavior:reduce?'auto':'smooth'})};
   if(!name){bad('Please enter your full name.');f.name.focus({preventScroll:true});return}
@@ -474,13 +481,13 @@ $('#form').addEventListener('submit',async e=>{e.preventDefault();const f=e.targ
   const data={name,ceremony:cer,ceremonyGuests:coming?+f.guests.value:0,lunch:f.lunch.value,lunchGuests:lj?+f.lunchGuests.value:0,lunchNote:lj?`Brings ${L.contribution} per person for own bill`:'',message:f.message.value.trim()};
   const txt=`RSVP · ${name}\nCeremony: ${cer}${coming?` (${data.ceremonyGuests} guest/s)`:''}\nLunch at ${L.restaurant}: ${f.lunch.value}${lj?` (${data.lunchGuests} guest/s)`:''}${data.message?`\nMessage: ${data.message}`:''}`;
   const wa=C.whatsappNumber?`https://wa.me/${C.whatsappNumber}?text=${encodeURIComponent(txt)}`:'';
-  if(!C.rsvpEndpoint&&!wa){bad('RSVP isn’t connected yet, so nothing has been saved or sent.');return}
+  if(!endpoint&&!wa){bad('RSVP isn’t connected yet, so nothing has been saved or sent.');return}
   let blocked=false;if(wa){try{blocked=!window.open(wa,'_blank')}catch{blocked=true}}
   const b=$('#send');b.disabled=true;b.textContent='Sending…';note.textContent='';
-  let ok=!C.rsvpEndpoint;
-  if(C.rsvpEndpoint){try{const r=await fetch(C.rsvpEndpoint,{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify(data)});ok=r.ok}catch{ok=false}}
+  let ok=!endpoint;
+  if(endpoint){try{const r=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({...data,_subject:`RSVP · ${name}`,_template:'table',_honey:''})});ok=r.ok}catch{ok=false}}
   if(!ok&&!wa){note.textContent='Something went wrong and your reply was not saved. Please try again.';b.disabled=false;b.textContent='Send my reply';return}
-  $('#tmsg').textContent=(coming?'Your reply is ready. I can’t wait to celebrate with you.':'Your reply is ready. You will be missed, and thank you for letting me know.')+(lj?` See you at ${L.restaurant} afterwards. Please remember to bring ${L.contribution} for your own bill.`:'')+(wa?(blocked?' WhatsApp didn’t open on its own, so please use the button below, then tap Send.':' One last step: please tap Send in WhatsApp so your reply reaches me.'):'');
+  $('#tmsg').textContent=(coming?'Your reply is ready. I can’t wait to celebrate with you.':'Your reply is ready. You will be missed, and thank you for letting me know.')+(lj?` See you at ${L.restaurant} afterwards. Please remember to bring ${L.contribution} for your own bill.`:'')+(wa?(blocked?' WhatsApp didn’t open on its own, so please use the button below, then tap Send.':' One last step: please tap Send in WhatsApp so your reply reaches me.'):'')+(ok&&endpoint?' A copy has also been sent to me by email.':'');
   if(wa){const a=$('#wabtn'),cp=$('#cpbtn');a.href=wa;a.style.display='block';cp.style.display='block';cp.onclick=async()=>{try{await navigator.clipboard.writeText(txt)}catch{const t=document.createElement('textarea');t.value=txt;document.body.append(t);t.select();try{document.execCommand('copy')}catch{}t.remove()}cp.textContent='Copied. Paste it in a WhatsApp message to +'+C.whatsappNumber}}
   $('#card').classList.add('sent')});
 </script>
