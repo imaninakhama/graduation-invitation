@@ -156,7 +156,7 @@ textarea{resize:vertical;min-height:4.5rem}
 .ch input:focus-visible+span,.btn:focus-visible,#music:focus-visible{outline:2px solid var(--burg);outline-offset:3px}
 .card .btn{color:var(--burg);width:100%;text-align:center}
 .card .btn:hover{color:var(--ivory);background:var(--burg);border-color:var(--burg)}
-.note{font-size:.82rem;margin-top:1rem;color:var(--burg);text-align:center}
+.note{font-weight:500;font-size:.9rem;margin-top:1.4rem;color:var(--burg);text-align:center}.note:empty{display:none}
 .thanksmsg{display:none;text-align:center;padding:2rem 0}
 .sent .thanksmsg{display:block}.sent form{display:none}
 .thanksmsg svg{width:84px;height:84px;margin:0 auto 1rem;color:var(--burg)}
@@ -236,7 +236,7 @@ footer{text-align:center;font-size:.6rem;letter-spacing:.3em;text-transform:uppe
 </div>
 
 <button id="music" class="off" aria-label="Toggle background music" aria-pressed="false"><span class="eq"><i></i><i></i><i></i><i></i></span><span id="mlab">Music off</span></button>
-<audio id="aud" loop preload="none"></audio>
+<audio id="aud" preload="none"></audio>
 
 <main id="main">
 <section id="hero">
@@ -311,10 +311,10 @@ footer{text-align:center;font-size:.6rem;letter-spacing:.3em;text-transform:uppe
       <div id="lwrap" style="display:none"><label for="lguests">Number joining lunch (including you)</label><select id="lguests" name="lunchGuests"></select></div>
       <label for="msg">A message for me (optional)</label><textarea id="msg" name="message"></textarea>
       <input type="text" name="_gotcha" tabindex="-1" autocomplete="off" style="display:none">
-      <button class="btn" type="submit" id="send">Send my reply</button>
       <p class="note" id="note" role="status"></p>
+      <button class="btn" type="submit" id="send">Send my reply</button>
     </form>
-    <div class="thanksmsg" aria-live="polite"><svg viewBox="0 0 84 84"><circle cx="42" cy="42" r="38"/><path d="M26 43l11 11 21-24"/></svg><span class="script">Thank you</span><p id="tmsg"></p></div>
+    <div class="thanksmsg" aria-live="polite"><svg viewBox="0 0 84 84"><circle cx="42" cy="42" r="38"/><path d="M26 43l11 11 21-24"/></svg><span class="script">Thank you</span><p id="tmsg"></p><a class="btn" id="wabtn" target="_blank" rel="noopener" style="display:none">Send my reply on WhatsApp</a><button class="btn" id="cpbtn" type="button" style="display:none;margin-top:1rem">Copy my reply instead</button></div>
   </div>
 </section>
 
@@ -375,13 +375,13 @@ const CONFIG = {
       "On 4 December I will receive my Certificate in Software Engineering. I am proud of it, quietly and fully, because I know exactly what it cost.",
       "I am deeply grateful to my family and friends, to the mentors who explained things twice, and to everyone who simply believed I would get there. I did not do this alone, and I would love for you to be beside me when it is recognised."]}
   ],
-  music: "assets/audio/invitation.mp3",     // royalty-free instrumental; volume below
+  music: "assets/audio/invitation-music.mp3",  // plays once, start to finish (no loop); volume below
   musicVolume: 0.35,
 
   
   // RSVP — see README notes: paste a Formspree (or similar) endpoint to receive replies.
   rsvpEndpoint: "",                         // e.g. "https://formspree.io/f/xxxxxxxx"
-  fallbackWhatsApp: "",                     // e.g. "2547XXXXXXXX" (no +) — offered if no endpoint
+  whatsappNumber: "254796755846",                       // YOUR WhatsApp number, country code first, no + or spaces, e.g. "2547XXXXXXXX"
   maxGuests: 4
 };
 /* ═════════════════════════════════════════════════════ */
@@ -435,8 +435,9 @@ const aud=$('#aud'),mb=$('#music');let fade;
 aud.src=C.music;aud.volume=0;
 function setUI(on){mb.classList.toggle('off',!on);mb.setAttribute('aria-pressed',on);$('#mlab').textContent=on?'Music on':'Music off'}
 function fadeTo(v,done){clearInterval(fade);fade=setInterval(()=>{const d=v-aud.volume;if(Math.abs(d)<.02){aud.volume=v;clearInterval(fade);done&&done()}else aud.volume=Math.min(1,Math.max(0,aud.volume+Math.sign(d)*.02))},80)}
-function play(){aud.play().then(()=>{setUI(true);fadeTo(C.musicVolume)}).catch(()=>setUI(false))}
-mb.onclick=()=>{if(aud.paused)play();else{setUI(false);fadeTo(0,()=>aud.pause())}};
+function play(){if(aud.error)aud.load();aud.play().then(()=>{setUI(true);fadeTo(C.musicVolume)}).catch(()=>{setUI(false);if(aud.error||aud.networkState===3)$('#mlab').textContent='No audio file'})}
+mb.onclick=()=>{if(mb.classList.contains('off'))play();else{setUI(false);fadeTo(0,()=>aud.pause())}};
+aud.onended=()=>setUI(false); // song finished: tap the music button to replay it
 aud.onerror=()=>{$('#mlab').textContent='No audio file'};
 
 /* Envelope sequence */
@@ -464,20 +465,24 @@ if(isNaN(target)){$('#cdmsg').textContent='Set a valid eventISO in CONFIG.'}else
 const gs=$('#guests'),lg=$('#lguests');for(let i=1;i<=C.maxGuests;i++){gs.add(new Option(i,i));lg.add(new Option(i,i))}
 const sync=()=>{$('#gwrap').style.display=$('input[name=attending]:checked').value.startsWith('Will')?'':'none';const l=$('input[name=lunch]:checked');$('#lwrap').style.display=l&&l.value==='Will join lunch'?'':'none'};
 $$('input[name=attending],input[name=lunch]').forEach(r=>r.onchange=sync);
-$('#form').addEventListener('submit',async e=>{e.preventDefault();const f=e.target.elements,note=$('#note'),name=f.name.value.trim();
-  if(!name){note.textContent='Please enter your full name.';f.name.focus();return}
-  if(!f.lunch.value){note.textContent='Please let us know whether you’ll join the optional lunch.';return}
+if(C.whatsappNumber)$('#note').textContent='Your reply will open in WhatsApp, ready to send to me.';
+$('#form').addEventListener('submit',async e=>{e.preventDefault();const f=e.target.elements,note=$('#note'),name=f.name.value.trim(),bad=m=>{note.textContent=m;note.scrollIntoView({block:'center',behavior:reduce?'auto':'smooth'})};
+  if(!name){bad('Please enter your full name.');f.name.focus({preventScroll:true});return}
+  if(!f.lunch.value){bad('Please choose whether you’ll join the optional lunch.');return}
   if(f._gotcha.value)return;
   const cer=f.attending.value,coming=cer.startsWith('Will'),lj=f.lunch.value==='Will join lunch',L=C.lunch;
   const data={name,ceremony:cer,ceremonyGuests:coming?+f.guests.value:0,lunch:f.lunch.value,lunchGuests:lj?+f.lunchGuests.value:0,lunchNote:lj?`Brings ${L.contribution} per person for own bill`:'',message:f.message.value.trim()};
-  if(!C.rsvpEndpoint){
-    const txt=`RSVP · ${name}\nCeremony: ${cer}${coming?` (${data.ceremonyGuests} guest/s)`:''}\nLunch: ${data.lunch}${lj?` (${data.lunchGuests})`:''}${data.message?`\nMessage: ${data.message}`:''}`;
-    note.innerHTML='';note.append('RSVP isn’t connected to a service yet, so nothing has been saved. ');
-    if(C.fallbackWhatsApp){const a=document.createElement('a');a.href=`https://wa.me/${C.fallbackWhatsApp}?text=${encodeURIComponent(txt)}`;a.textContent='Send your reply via WhatsApp instead';a.target='_blank';a.rel='noopener';a.style.color='inherit';note.append(a)}return}
+  const txt=`RSVP · ${name}\nCeremony: ${cer}${coming?` (${data.ceremonyGuests} guest/s)`:''}\nLunch at ${L.restaurant}: ${f.lunch.value}${lj?` (${data.lunchGuests} guest/s)`:''}${data.message?`\nMessage: ${data.message}`:''}`;
+  const wa=C.whatsappNumber?`https://wa.me/${C.whatsappNumber}?text=${encodeURIComponent(txt)}`:'';
+  if(!C.rsvpEndpoint&&!wa){bad('RSVP isn’t connected yet, so nothing has been saved or sent.');return}
+  let blocked=false;if(wa){try{blocked=!window.open(wa,'_blank')}catch{blocked=true}}
   const b=$('#send');b.disabled=true;b.textContent='Sending…';note.textContent='';
-  try{const r=await fetch(C.rsvpEndpoint,{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify(data)});
-    if(!r.ok)throw 0;$('#tmsg').textContent=(coming?'Your reply has been received. I can’t wait to celebrate with you.':'Your reply has been received. You will be missed, and thank you for letting me know.')+(lj?` See you at ${L.restaurant} afterwards. Please remember to bring ${L.contribution} for your own bill.`:'');$('#card').classList.add('sent')}
-  catch{note.textContent='Something went wrong and your reply was not saved. Please try again.';b.disabled=false;b.textContent='Send my reply'}});
+  let ok=!C.rsvpEndpoint;
+  if(C.rsvpEndpoint){try{const r=await fetch(C.rsvpEndpoint,{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify(data)});ok=r.ok}catch{ok=false}}
+  if(!ok&&!wa){note.textContent='Something went wrong and your reply was not saved. Please try again.';b.disabled=false;b.textContent='Send my reply';return}
+  $('#tmsg').textContent=(coming?'Your reply is ready. I can’t wait to celebrate with you.':'Your reply is ready. You will be missed, and thank you for letting me know.')+(lj?` See you at ${L.restaurant} afterwards. Please remember to bring ${L.contribution} for your own bill.`:'')+(wa?(blocked?' WhatsApp didn’t open on its own, so please use the button below, then tap Send.':' One last step: please tap Send in WhatsApp so your reply reaches me.'):'');
+  if(wa){const a=$('#wabtn'),cp=$('#cpbtn');a.href=wa;a.style.display='block';cp.style.display='block';cp.onclick=async()=>{try{await navigator.clipboard.writeText(txt)}catch{const t=document.createElement('textarea');t.value=txt;document.body.append(t);t.select();try{document.execCommand('copy')}catch{}t.remove()}cp.textContent='Copied. Paste it in a WhatsApp message to +'+C.whatsappNumber}}
+  $('#card').classList.add('sent')});
 </script>
 </body>
 </html>
